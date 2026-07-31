@@ -16,12 +16,16 @@ export async function PATCH(
     const body = await request.json();
     const { status } = body;
 
+    if (!status || typeof status !== 'string') {
+      return NextResponse.json({ error: 'Status is required' }, { status: 400 });
+    }
+
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Authorization: customers can only update their own orders, drivers only assigned ones
+    // Authorization: admin can update any order, customers only their own, drivers only assigned ones
     if (user.role === 'customer' && order.userId !== user.userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -32,12 +36,19 @@ export async function PATCH(
     // Validate status transition
     const validTransitions: Record<string, string[]> = {
       PENDING: ['CONFIRMED', 'CANCELLED'],
-      CONFIRMED: ['ASSIGNED'],
-      ASSIGNED: ['IN_TRANSIT'],
+      CONFIRMED: ['ASSIGNED', 'CANCELLED'],
+      ASSIGNED: ['IN_TRANSIT', 'CANCELLED'],
       IN_TRANSIT: ['DELIVERED'],
+      DELIVERED: [],
+      CANCELLED: [],
     };
 
-    if (!validTransitions[order.status]?.includes(status)) {
+    // Admin can skip steps (e.g., directly confirm and assign)
+    const allowedAdminStatuses = ['CONFIRMED', 'ASSIGNED', 'IN_TRANSIT', 'DELIVERED', 'CANCELLED'];
+    const isAdmin = user.role === 'admin';
+    const isTransitionValid = validTransitions[order.status]?.includes(status) || (isAdmin && allowedAdminStatuses.includes(status));
+
+    if (!isTransitionValid) {
       return NextResponse.json({ error: 'Invalid status transition' }, { status: 400 });
     }
 
@@ -95,7 +106,9 @@ export async function PATCH(
           });
         }
       }
-    } catch {}
+    } catch (notifError) {
+      console.error('Failed to create status notification:', notifError);
+    }
 
     return NextResponse.json({ order: updatedOrder });
   } catch (error) {

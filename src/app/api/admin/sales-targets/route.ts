@@ -33,14 +33,40 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { userId, targetType, period, targetAmount, month, year } = body;
 
+    if (!userId) {
+      return NextResponse.json({ error: 'Driver is required' }, { status: 400 });
+    }
+
+    const userExists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, role: true } });
+    if (!userExists) {
+      return NextResponse.json({ error: 'User not found' }, { status: 400 });
+    }
+    if (userExists.role !== 'driver') {
+      return NextResponse.json({ error: 'Sales targets can only be assigned to drivers' }, { status: 400 });
+    }
+
+    const parsedMonth = parseInt(month);
+    const parsedYear = parseInt(year);
+    if (isNaN(parsedMonth) || parsedMonth < 1 || parsedMonth > 12) {
+      return NextResponse.json({ error: 'Month must be between 1 and 12' }, { status: 400 });
+    }
+    if (isNaN(parsedYear) || parsedYear < 2020) {
+      return NextResponse.json({ error: 'Invalid year' }, { status: 400 });
+    }
+
+    const parsedAmount = parseFloat(targetAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json({ error: 'Target amount must be a positive number' }, { status: 400 });
+    }
+
     const target = await prisma.salesTarget.create({
       data: {
         userId,
         targetType: targetType || 'monthly',
-        period,
-        targetAmount: parseFloat(targetAmount),
-        month: parseInt(month),
-        year: parseInt(year),
+        period: period || `${parsedMonth}/${parsedYear}`,
+        targetAmount: parsedAmount,
+        month: parsedMonth,
+        year: parsedYear,
       },
       include: {
         user: { select: { id: true, name: true, email: true } },

@@ -102,11 +102,12 @@ export default function DriverPortal() {
     fetchManifest();
     fetchProducts();
     fetchNotifications();
-    const notifInterval = setInterval(() => {
-      fetchNotifications();
+    const refreshInterval = setInterval(() => {
       fetchManifest();
-    }, 5000);
-    return () => clearInterval(notifInterval);
+      fetchProducts();
+      fetchNotifications();
+    }, 15000);
+    return () => clearInterval(refreshInterval);
   }, []);
 
   useEffect(() => {

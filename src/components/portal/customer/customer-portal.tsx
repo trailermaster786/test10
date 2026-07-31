@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppStore } from '@/stores/app-store';
 import { Button } from '@/components/ui/button';
@@ -92,6 +92,10 @@ export default function CustomerPortal() {
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [showCardDialog, setShowCardDialog] = useState(false);
   const [qrInput, setQrInput] = useState('');
   const [bottleResult, setBottleResult] = useState<Bottle | null>(null);
   const [showBottleDialog, setShowBottleDialog] = useState(false);
@@ -109,8 +113,13 @@ export default function CustomerPortal() {
     fetchOrders();
     fetchAddresses();
     fetchNotifications();
-    const notifInterval = setInterval(() => fetchNotifications(), 5000);
-    return () => clearInterval(notifInterval);
+    const refreshInterval = setInterval(() => {
+      fetchProducts();
+      fetchOrders();
+      fetchAddresses();
+      fetchNotifications();
+    }, 15000);
+    return () => clearInterval(refreshInterval);
   }, []);
 
   useEffect(() => {
@@ -119,14 +128,6 @@ export default function CustomerPortal() {
       setProfilePhone(user.phone || '');
     }
   }, [user]);
-
-  useEffect(() => {
-    if (page !== 'orders') return;
-    const interval = setInterval(() => {
-      fetchOrders();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [page]);
 
   const fetchProducts = async () => {
     try {
@@ -229,6 +230,20 @@ export default function CustomerPortal() {
       return;
     }
 
+    if (paymentMethod === 'card') {
+      setShowCardDialog(true);
+      return;
+    }
+
+    await processOrder();
+  };
+
+  const confirmCardPayment = async () => {
+    setShowCardDialog(false);
+    await processOrder();
+  };
+
+  const processOrder = async () => {
     setLoading(true);
     try {
       const orderRes = await fetch('/api/orders/create', {
@@ -801,7 +816,7 @@ export default function CustomerPortal() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="cash">Cash on Delivery</SelectItem>
-                        <SelectItem value="card">Credit/Debit Card</SelectItem>
+                        <SelectItem value="card">Pay Online (Credit/Debit Card)</SelectItem>
                       </SelectContent>
                     </Select>
                   </motion.div>
@@ -1150,6 +1165,59 @@ export default function CustomerPortal() {
               </Button>
               <Button onClick={addAddress} className="flex-1 btn-primary">
                 Add Address
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card Payment Dialog */}
+      <Dialog open={showCardDialog} onOpenChange={setShowCardDialog}>
+        <DialogContent className="max-w-md glass-strong border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">Enter Card Details</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-300">Card Number</label>
+              <Input
+                placeholder="Card Number"
+                value={cardNumber}
+                onChange={(e) => setCardNumber(e.target.value)}
+                className="input-modern"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">Expiry Date</label>
+                <Input
+                  placeholder="MM/YY"
+                  value={cardExpiry}
+                  onChange={(e) => setCardExpiry(e.target.value)}
+                  className="input-modern"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-300">CVV</label>
+                <Input
+                  placeholder="CVV"
+                  value={cardCvv}
+                  onChange={(e) => setCardCvv(e.target.value)}
+                  className="input-modern"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="outline" onClick={() => setShowCardDialog(false)} className="flex-1 border-white/20 text-gray-300">
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmCardPayment}
+                disabled={loading}
+                className="flex-1 btn-primary"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                Confirm & Pay
               </Button>
             </div>
           </div>

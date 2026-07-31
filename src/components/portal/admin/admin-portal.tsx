@@ -175,13 +175,21 @@ export default function AdminPortal() {
     fetchProducts();
     connectWebSocket();
 
-    const notifInterval = setInterval(() => {
+    const refreshInterval = setInterval(() => {
+      fetchDashboard();
+      fetchOrders();
+      fetchUsers();
+      fetchBottles();
+      fetchTrucks();
+      fetchPromos();
+      fetchTargets();
       fetchNotifications();
-    }, 5000);
+      fetchProducts();
+    }, 15000);
 
     return () => {
       socketRef.current?.disconnect();
-      clearInterval(notifInterval);
+      clearInterval(refreshInterval);
     };
   }, []);
 
@@ -425,11 +433,12 @@ export default function AdminPortal() {
         if (!res.ok) throw new Error('Failed to update');
         toast.success('User updated');
       } else {
-        if (userForm.role === 'driver' && !userForm.password) { toast.error('Password is required for drivers'); return; }
+        if (!userForm.password) { toast.error('Password is required'); return; }
+        if (userForm.password.length < 6) { toast.error('Password must be at least 6 characters'); return; }
         const res = await fetch('/api/admin/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...userForm, password: userForm.password || 'changeme123' }),
+          body: JSON.stringify({ ...userForm, password: userForm.password }),
         });
         if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Failed to create'); }
         toast.success('User created');
@@ -2042,10 +2051,10 @@ export default function AdminPortal() {
               <label className="text-sm text-gray-300 mb-1 block">Email *</label>
               <Input type="email" value={userForm.email} onChange={(e) => setUserForm({ ...userForm, email: e.target.value })} placeholder="email@example.com" className="bg-white/5 border-white/10 text-white" />
             </div>
-            {!editingUser && userForm.role === 'driver' && (
+            {!editingUser && (
               <div>
                 <label className="text-sm text-gray-300 mb-1 block">Password *</label>
-                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder="Password" className="bg-white/5 border-white/10 text-white" />
+                <Input type="password" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} placeholder="Min 6 characters" className="bg-white/5 border-white/10 text-white" />
               </div>
             )}
             <div>

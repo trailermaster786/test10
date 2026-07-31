@@ -12,18 +12,35 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { items, addressId, paymentMethod, promoCode, notes } = body;
 
-    if (!items || items.length === 0) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: 'No items in order' }, { status: 400 });
     }
 
-    // Calculate totals
+    // Validate address belongs to user if provided
+    if (addressId) {
+      const address = await prisma.address.findUnique({ where: { id: addressId } });
+      if (!address || address.userId !== user.userId) {
+        return NextResponse.json({ error: 'Invalid address' }, { status: 400 });
+      }
+    }
+
+    // Calculate totals and validate stock
     let totalAmount = 0;
     const orderItems = [];
 
     for (const item of items) {
+      if (!item.productId || !item.quantity || item.quantity <= 0) {
+        return NextResponse.json({ error: 'Invalid item: productId and positive quantity required' }, { status: 400 });
+      }
       const product = await prisma.product.findUnique({ where: { id: item.productId } });
       if (!product) {
         return NextResponse.json({ error: `Product ${item.productId} not found` }, { status: 400 });
+      }
+      if (!product.isActive) {
+        return NextResponse.json({ error: `Product "${product.name}" is not available` }, { status: 400 });
+      }
+      if (product.stock < item.quantity) {
+        return NextResponse.json({ error: `Insufficient stock for "${product.name}". Available: ${product.stock}, requested: ${item.quantity}` }, { status: 400 });
       }
       const itemTotal = product.price * item.quantity;
       totalAmount += itemTotal;

@@ -30,17 +30,30 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { code, description, type, value, minOrder, maxUses, startsAt, endsAt } = body;
 
-    const existingPromo = await prisma.promoOffer.findUnique({ where: { code: code.toUpperCase() } });
+    if (!code || typeof code !== 'string' || code.trim().length === 0) {
+      return NextResponse.json({ error: 'Promo code is required' }, { status: 400 });
+    }
+    if (!type || !['percentage', 'fixed'].includes(type)) {
+      return NextResponse.json({ error: 'Type must be "percentage" or "fixed"' }, { status: 400 });
+    }
+    const parsedValue = parseFloat(value);
+    if (isNaN(parsedValue) || parsedValue <= 0) {
+      return NextResponse.json({ error: 'Value must be a positive number' }, { status: 400 });
+    }
+
+    const normalizedCode = code.trim().toUpperCase();
+
+    const existingPromo = await prisma.promoOffer.findUnique({ where: { code: normalizedCode } });
     if (existingPromo) {
       return NextResponse.json({ error: 'Code already exists' }, { status: 400 });
     }
 
     const promo = await prisma.promoOffer.create({
       data: {
-        code: code.toUpperCase(),
-        description,
+        code: normalizedCode,
+        description: description || null,
         type,
-        value: parseFloat(value),
+        value: parsedValue,
         minOrder: parseFloat(minOrder) || 0,
         maxUses: parseInt(maxUses) || 100,
         startsAt: startsAt ? new Date(startsAt) : null,
@@ -69,19 +82,36 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'Promo ID required' }, { status: 400 });
     }
 
+    const updateData: Record<string, unknown> = {};
+    if (code !== undefined) {
+      if (typeof code !== 'string' || code.trim().length === 0) {
+        return NextResponse.json({ error: 'Promo code cannot be empty' }, { status: 400 });
+      }
+      updateData.code = code.trim().toUpperCase();
+    }
+    if (description !== undefined) updateData.description = description || null;
+    if (type !== undefined) {
+      if (!['percentage', 'fixed'].includes(type)) {
+        return NextResponse.json({ error: 'Type must be "percentage" or "fixed"' }, { status: 400 });
+      }
+      updateData.type = type;
+    }
+    if (value !== undefined) {
+      const parsedValue = parseFloat(value);
+      if (isNaN(parsedValue) || parsedValue <= 0) {
+        return NextResponse.json({ error: 'Value must be a positive number' }, { status: 400 });
+      }
+      updateData.value = parsedValue;
+    }
+    if (minOrder !== undefined) updateData.minOrder = parseFloat(minOrder) || 0;
+    if (maxUses !== undefined) updateData.maxUses = parseInt(maxUses) || 100;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (startsAt !== undefined) updateData.startsAt = startsAt ? new Date(startsAt) : null;
+    if (endsAt !== undefined) updateData.endsAt = endsAt ? new Date(endsAt) : null;
+
     const promo = await prisma.promoOffer.update({
       where: { id },
-      data: {
-        ...(code !== undefined && { code: code.toUpperCase() }),
-        ...(description !== undefined && { description }),
-        ...(type !== undefined && { type }),
-        ...(value !== undefined && { value: parseFloat(value) }),
-        ...(minOrder !== undefined && { minOrder: parseFloat(minOrder) }),
-        ...(maxUses !== undefined && { maxUses: parseInt(maxUses) }),
-        ...(isActive !== undefined && { isActive }),
-        ...(startsAt !== undefined && { startsAt: startsAt ? new Date(startsAt) : null }),
-        ...(endsAt !== undefined && { endsAt: endsAt ? new Date(endsAt) : null }),
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ promo });

@@ -49,7 +49,8 @@ export async function GET() {
     const revenueByDay: Record<string, number> = {};
     dailyRevenue.forEach((order) => {
       const day = order.createdAt.toISOString().split('T')[0];
-      revenueByDay[day] = (revenueByDay[day] || 0) + order.finalAmount;
+      const amount = typeof order.finalAmount === 'number' && !isNaN(order.finalAmount) ? order.finalAmount : 0;
+      revenueByDay[day] = (revenueByDay[day] || 0) + amount;
     });
 
     const chartData = Object.entries(revenueByDay).map(([date, revenue]) => ({

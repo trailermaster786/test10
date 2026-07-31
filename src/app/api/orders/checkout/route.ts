@@ -12,6 +12,10 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { orderId } = body;
 
+    if (!orderId || typeof orderId !== 'string') {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
+    }
+
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
@@ -42,7 +46,9 @@ export async function POST(request: Request) {
           orderId: orderId,
         },
       });
-    } catch {}
+    } catch (notifError) {
+      console.error('Failed to create checkout notification:', notifError);
+    }
 
     return NextResponse.json({ order: updatedOrder, message: 'Payment successful' });
   } catch (error) {
